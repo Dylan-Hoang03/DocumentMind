@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
+import SearchButton from "./searchButton"; // adjust path if needed
+
 
 const API = "http://localhost:5000";
 
@@ -11,12 +13,12 @@ interface Message {
 export default function App() {
   const [pdfs, setPdfs] = useState<string[]>([]);
   const [file, setFile] = useState<File | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string[]>([]);
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [warning, setWarning] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null); // ✅ for scroll to bottom
+  const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     axios.get(`${API}/list-pdfs`).then(res => setPdfs(res.data.pdfs));
@@ -24,11 +26,10 @@ export default function App() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]); // ✅ scroll when messages update
+  }, [messages]);
 
   const upload = async () => {
     if (!file) return;
-
     const form = new FormData();
     form.append("file", file);
 
@@ -54,8 +55,8 @@ export default function App() {
   };
 
   const ask = async () => {
-    if (!selected) {
-      setWarning("⚠️ Please select a PDF before chatting.");
+    if (!selected.length) {
+      setWarning("⚠️ Please select at least one PDF before chatting.");
       return;
     }
     if (!question.trim() || loading) return;
@@ -67,7 +68,7 @@ export default function App() {
 
     try {
       const res = await axios.post(`${API}/query`, {
-        filename: selected,
+        filenames: selected,
         question: sentQuestion,
       });
 
@@ -89,15 +90,19 @@ export default function App() {
       <div className="w-64 bg-white p-4 shadow-md flex flex-col">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-bold">📄 PDFs</h2>
-          <label className="cursor-pointer text-lg">
-            +
-            <input
-              type="file"
-              hidden
-              onChange={e => setFile(e.target.files?.[0] || null)}
-              onClick={e => (e.currentTarget.value = "")}
-            />
-          </label>
+             <SearchButton />
+             <div className="cursor-pointer text-lg px-2 py-1 rounded hover:bg-gray-200">
+
+          <a
+  href="https://inovarcloud-my.sharepoint.us/personal/lam_nguyenngoc_spartronics_com/_layouts/15/onedrive.aspx?id=%2Fpersonal%2Flam%5Fnguyenngoc%5Fspartronics%5Fcom%2FDocuments%2FDylan%20Project&ga=1"
+  target="_blank"
+  rel="noopener noreferrer"
+  title="Open SharePoint Folder"
+>
+  +
+</a>
+</div>
+          
         </div>
 
         <button
@@ -124,9 +129,15 @@ export default function App() {
           {pdfs.map(name => (
             <button
               key={name}
-              className={`w-full text-left p-2 rounded hover:bg-gray-200 ${selected === name ? "bg-blue-100 font-semibold" : ""}`}
+              className={`w-full text-left p-2 rounded hover:bg-gray-200 ${
+                selected.includes(name) ? "bg-green-200 font-semibold" : ""
+              }`}
               onClick={() => {
-                setSelected(name);
+                setSelected(prev =>
+                  prev.includes(name)
+                    ? prev.filter(n => n !== name)
+                    : [...prev, name]
+                );
                 setWarning(null);
               }}
             >
@@ -140,7 +151,11 @@ export default function App() {
       <div className="flex-1 flex flex-col">
         <div className="p-4 border-b bg-white shadow-sm">
           <h1 className="text-2xl font-bold">DocumentMind</h1>
-          {selected && <p className="text-gray-500">Currently chatting with: {selected}</p>}
+          {selected.length > 0 && (
+            <p className="text-gray-500 text-sm">
+              Chatting with: {selected.join(", ")}
+            </p>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50 flex flex-col">
@@ -158,7 +173,7 @@ export default function App() {
                 : <p>{msg.text}</p>}
             </div>
           ))}
-          <div ref={bottomRef} /> {/* ✅ auto-scroll anchor */}
+          <div ref={bottomRef} />
         </div>
 
         {warning && (
@@ -172,7 +187,7 @@ export default function App() {
           <div
             className="flex-1"
             onClick={() => {
-              if (!selected) {
+              if (!selected.length) {
                 setWarning("⚠️ Please select a PDF before chatting.");
               }
             }}
@@ -184,7 +199,7 @@ export default function App() {
               onChange={e => setQuestion(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-4 py-2"
               onKeyDown={e => e.key === "Enter" && ask()}
-              disabled={!selected || loading}
+              disabled={!selected.length || loading}
             />
           </div>
           <button
