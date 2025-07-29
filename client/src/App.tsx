@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import SearchButton from "./searchButton"; // adjust path if needed
 
-
 const API = "http://localhost:5000";
 
 interface Message {
@@ -13,7 +12,7 @@ interface Message {
 export default function App() {
   const [pdfs, setPdfs] = useState<string[]>([]);
   const [file, setFile] = useState<File | null>(null);
-  const [selected, setSelected] = useState<string[]>([]);
+  const [selected, setSelected] = useState<string[]>([]); // Store selected PDFs
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [warning, setWarning] = useState<string | null>(null);
@@ -21,10 +20,18 @@ export default function App() {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    axios.get(`${API}/list-pdfs`).then(res => setPdfs(res.data.pdfs));
+    // Fetch the list of PDFs from the backend
+    axios.get(`${API}/list-pdfs`).then(res => {
+      const pdfList = res.data.pdfs;
+      setPdfs(pdfList);
+
+      // Pre-select all PDFs by default
+      setSelected(pdfList); 
+    });
   }, []);
 
   useEffect(() => {
+    // Scroll to the bottom when new messages arrive
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
@@ -38,25 +45,27 @@ export default function App() {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
-      alert("✅ Upload successful");
+      alert("Upload successful");
       console.log("Upload result:", res.data);
 
+      // Update PDF list and pre-select all
       const updated = await axios.get(`${API}/list-pdfs`);
       setPdfs(updated.data.pdfs);
+      setSelected(updated.data.pdfs); // Select all after upload
       setFile(null);
     } catch (err: any) {
       if (err.response?.status === 409) {
-        alert("⚠️ A file with this name already exists. Please rename the file before uploading.");
+        alert("A file with this name already exists. Please rename the file before uploading.");
       } else {
         console.error("Upload failed:", err);
-        alert("❌ Upload failed");
+        alert("Upload failed");
       }
     }
   };
 
   const ask = async () => {
     if (!selected.length) {
-      setWarning("⚠️ Please select at least one PDF before chatting.");
+      setWarning("Please select at least one PDF before chatting.");
       return;
     }
     if (!question.trim() || loading) return;
@@ -74,10 +83,10 @@ export default function App() {
 
       setMessages(prev => [...prev, { type: "bot", text: res.data.response }]);
     } catch (err) {
-      console.error("❌ Query failed:", err);
+      console.error("Query failed:", err);
       setMessages(prev => [
         ...prev,
-        { type: "bot", text: "❌ Something went wrong. Please try again." }
+        { type: "bot", text: "Something went wrong. Please try again." }
       ]);
     } finally {
       setLoading(false);
@@ -90,19 +99,17 @@ export default function App() {
       <div className="w-64 bg-white p-4 shadow-md flex flex-col">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-bold">📄 PDFs</h2>
-             <SearchButton />
-             <div className="cursor-pointer text-lg px-2 py-1 rounded hover:bg-gray-200">
-
-          <a
-  href="https://inovarcloud-my.sharepoint.us/personal/lam_nguyenngoc_spartronics_com/_layouts/15/onedrive.aspx?id=%2Fpersonal%2Flam%5Fnguyenngoc%5Fspartronics%5Fcom%2FDocuments%2FDylan%20Project&ga=1"
-  target="_blank"
-  rel="noopener noreferrer"
-  title="Open SharePoint Folder"
->
-  +
-</a>
-</div>
-          
+          <SearchButton />
+          <div className="cursor-pointer text-lg px-2 py-1 rounded hover:bg-gray-200">
+            <a
+              href="https://inovarcloud-my.sharepoint.us/personal/lam_nguyenngoc_spartronics_com/_layouts/15/onedrive.aspx?id=%2Fpersonal%2Flam%5Fnguyenngoc%5Fspartronics%5Fcom%2FDocuments%2FDylan%20Project&ga=1"
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Open SharePoint Folder"
+            >
+              +
+            </a>
+          </div>
         </div>
 
         <button
@@ -125,26 +132,7 @@ export default function App() {
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto space-y-2">
-          {pdfs.map(name => (
-            <button
-              key={name}
-              className={`w-full text-left p-2 rounded hover:bg-gray-200 ${
-                selected.includes(name) ? "bg-green-200 font-semibold" : ""
-              }`}
-              onClick={() => {
-                setSelected(prev =>
-                  prev.includes(name)
-                    ? prev.filter(n => n !== name)
-                    : [...prev, name]
-                );
-                setWarning(null);
-              }}
-            >
-              {name}
-            </button>
-          ))}
-        </div>
+        {/* Hide PDF list since all PDFs are selected by default */}
       </div>
 
       {/* Main Chat UI */}

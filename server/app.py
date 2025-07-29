@@ -21,11 +21,15 @@ import tempfile
 from datetime import datetime
 from dotenv import load_dotenv
 import re
-import fitz  # pip install PyMuPDF
+import fitz  
 from io import BytesIO
 
-# === Load environment variables ===
+#inport modules
+
+
 load_dotenv()
+
+#import DB info from .env file
 
 DB_USER = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
@@ -33,15 +37,16 @@ DB_SERVER = os.getenv("DB_SERVER")
 DB_NAME = os.getenv("DB_NAME")
 DB_PORT = os.getenv("DB_PORT")
 
-# === Shared OneDrive Folder Path ===
-ONEDRIVE_SHARED_FOLDER = r"C:\\Users\\ly.hoangminhdatdylan\\OneDrive - Spartronics\\NguyenNgoc, Lam's files - Dylan Project"
+#temp connection to Lam's file on sharepoint
 
-# === Setup ===
+ONEDRIVE_SHARED_FOLDER = r"\\vtnweb1\\Edoc_Data"
+
+#creaate app
 app = Flask(__name__)
 app.config["SQLALCHEMY_ECHO"] = True
 CORS(app)
 
-# === SQL Server Configuration ===
+#connect to database (outdated due to scope)
 connection_string = URL.create(
     drivername="mssql+pyodbc",
     username=DB_USER,
@@ -56,7 +61,7 @@ app.config["SQLALCHEMY_DATABASE_URI"] = connection_string
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
 
-# === Models ===
+# Document as defined in sql (outdated due to scope change)
 class Document(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     filename = db.Column(db.String(255), unique=True, nullable=False)
@@ -64,76 +69,80 @@ class Document(db.Model):
     original_name = db.Column(db.String(255), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-# === Index Local PDFs ===
+#indexxing pdfs
 def index_local_pdfs():
-    print("🔍 Scanning shared folder for PDFs...")
-
-    for filename in os.listdir(ONEDRIVE_SHARED_FOLDER):
-        if not filename.lower().endswith(".pdf"):
-            continue
-
-        full_path = os.path.join(ONEDRIVE_SHARED_FOLDER, filename)
-        base_filename = os.path.splitext(filename)[0]
-        faiss_folder = os.path.join("faiss_indexes", base_filename)
-        faiss_index_path = os.path.join(faiss_folder, "faiss.index")
-
-        print(f"\n📄 Found PDF: {filename}")
-
-        if os.path.exists(faiss_index_path):
-            print(f"✅ FAISS index already exists for {filename}, skipping.")
-            continue
-
-        try:
-            with open(full_path, "rb") as f:
-                file_content = f.read()
-
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-                tmp.write(file_content)
-                tmp_path = tmp.name
-
-            print(f"📥 Created temporary file for processing: {tmp_path}")
-
-            documents = SimpleDirectoryReader(input_files=[tmp_path]).load_data()
-            print(f"📦 Extracted {len(documents)} document chunks from {filename}")
-
-            if not documents:
-                print(f"⚠️ No text extracted from {filename}, skipping.")
+    print("Scanning shared folder for PDFs...")
+    
+    for root, dirs, files in os.walk(ONEDRIVE_SHARED_FOLDER):
+        for filename in files:
+            if not filename.lower().endswith(".pdf"):
                 continue
 
-            embed_model = OpenAIEmbedding(
-                model="text-embedding-ada-002",
-                api_base="http://localhost:1234/v1",
-                api_key="lm-studio"
-            )
+            # Correct path joining using os.path.join(root, filename)
+            full_path = os.path.join(root, filename) 
+            base_filename = os.path.splitext(filename)[0]
+            faiss_folder = os.path.join("faiss_indexes", base_filename)
+            faiss_index_path = os.path.join(faiss_folder, "faiss.index")
 
-            faiss_index = faiss.IndexFlatL2(768)
-            vector_store = FaissVectorStore(faiss_index=faiss_index)
-            storage_context = StorageContext.from_defaults(vector_store=vector_store)
+            print(f"\nFound PDF: {filename} at {full_path}")
 
-            index = VectorStoreIndex.from_documents(
-                documents, storage_context=storage_context, embed_model=embed_model
-            )
-
-            os.makedirs(faiss_folder, exist_ok=True)
-            print(f"💾 Saving FAISS index to: {faiss_folder}")
+            if os.path.exists(faiss_index_path):
+                print(f"FAISS index already exists for {filename}, skipping.")
+                continue
 
             try:
-                faiss.write_index(faiss_index, os.path.join(faiss_folder, "faiss.index"))
-                storage_context.persist(persist_dir=faiss_folder)
-                print(f"✅ Indexing completed for {filename}")
+                with open(full_path, "rb") as f:
+                    file_content = f.read()
+
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                    tmp.write(file_content)
+                    tmp_path = tmp.name
+
+                print(f"Created temporary file for processing: {tmp_path}")
+
+                documents = SimpleDirectoryReader(input_files=[tmp_path]).load_data()
+                print(f"Extracted {len(documents)} document chunks from {filename}")
+
+                if not documents:
+                    print(f"No text extracted from {filename}, skipping.")
+                    continue
+
+                embed_model = OpenAIEmbedding(
+                    model="text-embedding-ada-002",
+                    api_base="http://localhost:1234/v1",
+                    api_key="lm-studio"
+                )
+
+                faiss_index = faiss.IndexFlatL2(768)
+                vector_store = FaissVectorStore(faiss_index=faiss_index)
+                storage_context = StorageContext.from_defaults(vector_store=vector_store)
+
+                index = VectorStoreIndex.from_documents(
+                    documents, storage_context=storage_context, embed_model=embed_model
+                )
+
+                os.makedirs(faiss_folder, exist_ok=True)
+                print(f"Saving FAISS index to: {faiss_folder}")
+
+                try:
+                    faiss.write_index(faiss_index, os.path.join(faiss_folder, "faiss.index"))
+                    storage_context.persist(persist_dir=faiss_folder)
+                    print(f"Indexing completed for {filename}")
+                except Exception as e:
+                    print(f"Failed to write FAISS index for {filename}: {e}")
+
             except Exception as e:
-                print(f"❌ Failed to write FAISS index for {filename}: {e}")
+                print(f"Error processing {filename}: {e}")
 
-        except Exception as e:
-            print(f"❌ Error processing {filename}: {e}")
-
-        finally:
-            if 'tmp_path' in locals() and os.path.exists(tmp_path):
-                os.remove(tmp_path)
-                print(f"🧹 Temporary file deleted: {tmp_path}")
+            finally:
+                # Clean up temporary file
+                if 'tmp_path' in locals() and os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+                    print(f"Temporary file deleted: {tmp_path}")
 
 
-# === Format LLM Output ===
+
+#formatting list answers and paragraphs
 def format_llm_response(text: str) -> list[str]:
     lines = text.strip().split("\n")
     results = []
@@ -162,9 +171,11 @@ def format_llm_response(text: str) -> list[str]:
 
     return results
 
+#showing pdfs on the sidebar method (outdated due to scope change)
+
 @app.route("/list-pdfs", methods=["GET"])
 def list_pdfs():
-    print("📥 /list-pdfs triggered — indexing any new PDFs...")
+    print("/list-pdfs triggered — indexing any new PDFs...")
     pdfs = []
 
     for filename in os.listdir(ONEDRIVE_SHARED_FOLDER):
@@ -182,7 +193,7 @@ def list_pdfs():
         if os.path.exists(faiss_index_path):
             continue
 
-        print(f"🆕 Indexing {filename} on-demand...")
+        print(f" Indexing {filename} on-demand...")
 
         try:
             with open(full_path, "rb") as f:
@@ -193,10 +204,10 @@ def list_pdfs():
                 tmp_path = tmp.name
 
             documents = SimpleDirectoryReader(input_files=[tmp_path]).load_data()
-            print(f"📄 Extracted {len(documents)} chunks from {filename}")
+            print(f"Extracted {len(documents)} chunks from {filename}")
 
             if not documents:
-                print(f"⚠️ No content found in {filename}, skipping.")
+                print(f"No content found in {filename}, skipping.")
                 continue
 
             embed_model = OpenAIEmbedding(
@@ -217,20 +228,20 @@ def list_pdfs():
             faiss.write_index(faiss_index, os.path.join(faiss_folder, "faiss.index"))
             storage_context.persist(persist_dir=faiss_folder)
 
-            print(f"✅ FAISS index generated for {filename}")
+            print(f"FAISS index generated for {filename}")
 
         except Exception as e:
-            print(f"❌ Error indexing {filename}: {e}")
+            print(f"Error indexing {filename}: {e}")
 
         finally:
             if 'tmp_path' in locals() and os.path.exists(tmp_path):
                 os.remove(tmp_path)
-                print(f"🧹 Temp file deleted: {tmp_path}")
+                print(f"Temp file deleted: {tmp_path}")
 
     return jsonify({"pdfs": pdfs})
 
 
-# === Query PDFs ===
+#ask LLM
 @app.route("/query", methods=["POST"])
 def query_pdf():
     data = request.get_json()
@@ -272,7 +283,7 @@ Provide clear, concise, and factual answers. Do not infer any answers. If the an
             faiss_index_path = os.path.join(faiss_folder, "faiss.index")
 
             if not os.path.exists(faiss_index_path):
-                print(f"⚠️ FAISS index not found for {filename}")
+                print(f"FAISS index not found for {filename}")
                 continue
 
             faiss_index = faiss.read_index(faiss_index_path)
@@ -284,7 +295,7 @@ Provide clear, concise, and factual answers. Do not infer any answers. If the an
 
             docstore = storage_context.docstore
             if not hasattr(docstore, "docs") or not docstore.docs:
-                print(f"⚠️ Docstore is empty for {filename}")
+                print(f"Docstore is empty for {filename}")
                 continue
 
             nodes = list(docstore.docs.values())
@@ -311,7 +322,7 @@ Provide clear, concise, and factual answers. Do not infer any answers. If the an
         return jsonify({"response": formatted})
 
     except Exception as e:
-        print("❌ Error querying documents:", e)
+        print("Error querying documents:", e)
         return jsonify({"error": str(e)}), 500
 
 
@@ -353,11 +364,11 @@ def semantic_search():
 
                 # Safety: confirm it's cosine-compatible
                 if not isinstance(faiss_index, faiss.IndexFlatIP):
-                    print(f"⚠️ {filename} index is not IP-based. Skipping.")
+                    print(f"{filename} index is not IP-based. Skipping.")
                     continue
 
                 # Perform the search
-                scores, indices = faiss_index.search(query_vector, k=1)
+                scores, indices = faiss_index.search(query_vector, k=3)
             
 
                 if scores[0][0] >= 0.0:  # You can adjust this threshold
@@ -366,16 +377,15 @@ def semantic_search():
                         "score": float(scores[0][0])
                     })
 
-                print(f"✅ {filename} | Score: {scores[0][0]}")
 
             except Exception as e:
-                print(f"❌ Error searching {filename}: {e}")
+                print(f"Error searching {filename}: {e}")
 
         results = sorted(results, key=lambda x: -x["score"])
         return jsonify({"matches": results})
 
     except Exception as e:
-        print("❌ Error in semantic search:", e)
+        print("Error in semantic search:", e)
         return jsonify({"error": str(e)}), 500
 
 
