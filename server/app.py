@@ -31,43 +31,16 @@ load_dotenv()
 
 #import DB info from .env file
 
-DB_USER = os.getenv("DB_USER")
-DB_PASSWORD = os.getenv("DB_PASSWORD")
-DB_SERVER = os.getenv("DB_SERVER")
-DB_NAME = os.getenv("DB_NAME")
-DB_PORT = os.getenv("DB_PORT")
 
 #temp connection to Lam's file on sharepoint
 
-ONEDRIVE_SHARED_FOLDER = r"\\vtnweb1\\Edoc_Data"
+ONEDRIVE_SHARED_FOLDER = r"c:\Users\ly.hoangminhdatdylan\OneDrive - Spartronics\NguyenNgoc, Lam's files - Dylan Project"
 
 #creaate app
 app = Flask(__name__)
-app.config["SQLALCHEMY_ECHO"] = True
 CORS(app)
 
-#connect to database (outdated due to scope)
-connection_string = URL.create(
-    drivername="mssql+pyodbc",
-    username=DB_USER,
-    password=DB_PASSWORD,
-    host=DB_SERVER,
-    port=int(DB_PORT) if DB_PORT else None,
-    database=DB_NAME,
-    query={"driver": "ODBC Driver 17 for SQL Server"}
-)
 
-app.config["SQLALCHEMY_DATABASE_URI"] = connection_string
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-db = SQLAlchemy(app)
-
-# Document as defined in sql (outdated due to scope change)
-class Document(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    filename = db.Column(db.String(255), unique=True, nullable=False)
-    content = db.Column(db.LargeBinary, nullable=False)
-    original_name = db.Column(db.String(255), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 #indexxing pdfs
 def index_local_pdfs():
@@ -178,73 +151,78 @@ def list_pdfs():
     print("/list-pdfs triggered — indexing any new PDFs...")
     pdfs = []
 
-    for filename in os.listdir(ONEDRIVE_SHARED_FOLDER):
-        if not filename.lower().endswith(".pdf"):
-            continue
-
-        full_path = os.path.join(ONEDRIVE_SHARED_FOLDER, filename)
-        base_filename = os.path.splitext(filename)[0]
-        faiss_folder = os.path.join("faiss_indexes", base_filename)
-        faiss_index_path = os.path.join(faiss_folder, "faiss.index")
-
-        pdfs.append(filename)
-
-        # Check if FAISS index already exists
-        if os.path.exists(faiss_index_path):
-            continue
-
-        print(f" Indexing {filename} on-demand...")
-
-        try:
-            with open(full_path, "rb") as f:
-                file_content = f.read()
-
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-                tmp.write(file_content)
-                tmp_path = tmp.name
-
-            documents = SimpleDirectoryReader(input_files=[tmp_path]).load_data()
-            print(f"Extracted {len(documents)} chunks from {filename}")
-
-            if not documents:
-                print(f"No content found in {filename}, skipping.")
+    # Use os.walk() to traverse directories and subdirectories
+    for root, dirs, files in os.walk(ONEDRIVE_SHARED_FOLDER): 
+        for filename in files:
+            print(filename)
+            if not filename.lower().endswith(".pdf"):
                 continue
 
-            embed_model = OpenAIEmbedding(
-                model="text-embedding-ada-002",
-                api_base="http://localhost:1234/v1",
-                api_key="lm-studio"
-            )
+            full_path = os.path.join(root, filename)
+            base_filename = os.path.splitext(filename)[0]
+            faiss_folder = os.path.join("faiss_indexes", base_filename)
+            faiss_index_path = os.path.join(faiss_folder, "faiss.index")
 
-            faiss_index = faiss.IndexFlatL2(768)
-            vector_store = FaissVectorStore(faiss_index=faiss_index)
-            storage_context = StorageContext.from_defaults(vector_store=vector_store)
+            pdfs.append(filename)
 
-            index = VectorStoreIndex.from_documents(
-                documents, storage_context=storage_context, embed_model=embed_model
-            )
+            # Check if FAISS index already exists
+            if os.path.exists(faiss_index_path):
+                continue
 
-            os.makedirs(faiss_folder, exist_ok=True)
-            faiss.write_index(faiss_index, os.path.join(faiss_folder, "faiss.index"))
-            storage_context.persist(persist_dir=faiss_folder)
+            print(f"Indexing {filename} on-demand...")
 
-            print(f"FAISS index generated for {filename}")
+            try:
+                with open(full_path, "rb") as f:
+                    file_content = f.read()
 
-        except Exception as e:
-            print(f"Error indexing {filename}: {e}")
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                    tmp.write(file_content)
+                    tmp_path = tmp.name
 
-        finally:
-            if 'tmp_path' in locals() and os.path.exists(tmp_path):
-                os.remove(tmp_path)
-                print(f"Temp file deleted: {tmp_path}")
+                documents = SimpleDirectoryReader(input_files=[tmp_path]).load_data()
+                print(f"Extracted {len(documents)} chunks from {filename}")
+
+                if not documents:
+                    print(f"No content found in {filename}, skipping.")
+                    continue
+
+                embed_model = OpenAIEmbedding(
+                    model="text-embedding-ada-002",
+                    api_base="http://localhost:1234/v1",
+                    api_key="lm-studio"
+                )
+
+                faiss_index = faiss.IndexFlatL2(768)
+                vector_store = FaissVectorStore(faiss_index=faiss_index)
+                storage_context = StorageContext.from_defaults(vector_store=vector_store)
+
+                index = VectorStoreIndex.from_documents(
+                    documents, storage_context=storage_context, embed_model=embed_model
+                )
+
+                os.makedirs(faiss_folder, exist_ok=True)
+                faiss.write_index(faiss_index, os.path.join(faiss_folder, "faiss.index"))
+                storage_context.persist(persist_dir=faiss_folder)
+
+                print(f"FAISS index generated for {filename}")
+
+            except Exception as e:
+                print(f"Error indexing {filename}: {e}")
+
+            finally:
+                if 'tmp_path' in locals() and os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+                    print(f"Temp file deleted: {tmp_path}")
 
     return jsonify({"pdfs": pdfs})
+
 
 
 #ask LLM
 @app.route("/query", methods=["POST"])
 def query_pdf():
     data = request.get_json()
+    
     filenames = data.get("filenames")
     question = data.get("question")
     question+= "answer only according to the documents /no_think"
@@ -277,6 +255,7 @@ Provide clear, concise, and factual answers. Do not infer any answers. If the an
     )
 
     try:
+        
         for filename in filenames:
             base_filename = os.path.splitext(filename)[0]
             faiss_folder = os.path.join("faiss_indexes", base_filename)
@@ -395,6 +374,5 @@ def semantic_search():
 # === Init ===
 if __name__ == "__main__":
     with app.app_context():
-        db.create_all()
         index_local_pdfs()
     app.run(debug=True) 
