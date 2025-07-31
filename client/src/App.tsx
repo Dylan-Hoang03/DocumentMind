@@ -100,26 +100,10 @@ export default function App() {
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-bold">📄 PDFs</h2>
           <SearchButton />
-          <div className="cursor-pointer text-lg px-2 py-1 rounded hover:bg-gray-200">
-            <a
-              href="https://inovarcloud-my.sharepoint.us/personal/lam_nguyenngoc_spartronics_com/_layouts/15/onedrive.aspx?id=%2Fpersonal%2Flam%5Fnguyenngoc%5Fspartronics%5Fcom%2FDocuments%2FDylan%20Project&ga=1"
-              target="_blank"
-              rel="noopener noreferrer"
-              title="Open SharePoint Folder"
-            >
-              +
-            </a>
-          </div>
+         
         </div>
 
-        <button
-          onClick={upload}
-          disabled={!file}
-          className="bg-blue-500 text-white py-1 px-3 rounded disabled:opacity-50 mb-2"
-        >
-          Upload
-        </button>
-
+      
         {file && (
           <div className="flex items-center justify-between text-sm text-gray-600 mb-4">
             <span className="truncate max-w-[150px]">📎 {file.name}</span>
@@ -139,11 +123,7 @@ export default function App() {
       <div className="flex-1 flex flex-col">
         <div className="p-4 border-b bg-white shadow-sm">
           <h1 className="text-2xl font-bold">DocumentMind</h1>
-          {selected.length > 0 && (
-            <p className="text-gray-500 text-sm">
-              Chatting with: {selected.join(", ")}
-            </p>
-          )}
+         
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50 flex flex-col">
