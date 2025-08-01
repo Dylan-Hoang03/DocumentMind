@@ -54,11 +54,11 @@ o	Use the frontend to test the file upload, querying, and search functionalities
 o	Ensure that your backend is processing PDFs, creating FAISS indexes, and responding to queries from the frontend.
 
 
-Run server directions
+Run server directions: 
 cd server
 venv\Scripts\activate   
 python app.py
 
-Run client dicrection
+Run client directions: 
 cd client
 npm start
