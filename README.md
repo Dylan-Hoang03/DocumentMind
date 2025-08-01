@@ -44,7 +44,7 @@ Step 6: Run the Backend
 python app.py
 This should start the Flask server, and you should see output like Running on http://127.0.0.1:5000/.
 ________________________________________
-Step 8: Test the Project
+Step 7: Test the Project
 1.	Open your frontend (if it's a React app):
 npm start (if developing)
 npm run build (if deploying)
@@ -59,6 +59,6 @@ cd server
 venv\Scripts\activate   
 python app.py
 
-Run client dicrectionS
+Run client dicrection
 cd client
 npm start
