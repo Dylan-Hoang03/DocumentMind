@@ -63,35 +63,32 @@ export default function App() {
     }
   };
 
-  const ask = async () => {
-    if (!selected.length) {
-      setWarning("Please select at least one PDF before chatting.");
-      return;
-    }
-    if (!question.trim() || loading) return;
+const ask = async () => {
+  if (!question.trim() || loading) return;
 
-    const sentQuestion = question;
-    setMessages(prev => [...prev, { type: "user", text: sentQuestion }]);
-    setQuestion("");
-    setLoading(true);
+  const sentQuestion = question;
+  setMessages(prev => [...prev, { type: "user", text: sentQuestion }]);
+  setQuestion("");
+  setLoading(true);
 
-    try {
-      const res = await axios.post(`${API}/query`, {
-        filenames: selected,
-        question: sentQuestion,
-      });
+  try {
+    // Only send the question, no need for filenames anymore
+    const res = await axios.post(`${API}/query`, {
+      question: sentQuestion, // Just the question is needed now
+    });
 
-      setMessages(prev => [...prev, { type: "bot", text: res.data.response }]);
-    } catch (err) {
-      console.error("Query failed:", err);
-      setMessages(prev => [
-        ...prev,
-        { type: "bot", text: "Something went wrong. Please try again." }
-      ]);
-    } finally {
-      setLoading(false);
-    }
-  };
+    setMessages(prev => [...prev, { type: "bot", text: res.data.response }]);
+  } catch (err) {
+    console.error("Query failed:", err);
+    setMessages(prev => [
+      ...prev,
+      { type: "bot", text: "Something went wrong. Please try again." }
+    ]);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   return (
     <div className="flex h-screen bg-gray-100">
@@ -155,9 +152,7 @@ export default function App() {
           <div
             className="flex-1"
             onClick={() => {
-              if (!selected.length) {
-                setWarning("⚠️ Please select a PDF before chatting.");
-              }
+             
             }}
           >
             <input
@@ -167,13 +162,13 @@ export default function App() {
               onChange={e => setQuestion(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-4 py-2"
               onKeyDown={e => e.key === "Enter" && ask()}
-              disabled={!selected.length || loading}
+             
             />
           </div>
           <button
             onClick={ask}
             className="bg-green-500 text-white px-4 py-2 rounded-lg disabled:opacity-50"
-            disabled={!question.trim() || loading}
+            
           >
             {loading ? "Sending..." : "Send"}
           </button>
